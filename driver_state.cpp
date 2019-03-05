@@ -16,18 +16,17 @@ driver_state::~driver_state()
 // are not known when this class is constructed.
 void initialize_render(driver_state& state, int width, int height)
 {
-    state.image_width=width;
-    state.image_height=height;
-    state.image_color=0;
-    state.image_depth=0;
-    
-    int length = width * height;
-    state.image_color = new pixel[length];
+    	state.image_width=width;
+    	state.image_height=height;
+    	state.image_color=0;
+   	state.image_depth=0;
 
-    for(int i = 0; i < length; i++){
-	state.image_color[i] = make_pixel(0, 0, 0);
-    }
-    std::cout<<"TODO: allocate and initialize state.image_color and state.image_depth."<<std::endl;
+    	state.image_color = new pixel[width * height];
+    
+
+	for (int i = 0; i < width * height; ++i) {
+		state.image_color[i] = make_pixel(0, 0, 0);
+    	}
 }
 
 // This function will be called to render the data that has been stored in this class.
@@ -39,45 +38,33 @@ void initialize_render(driver_state& state, int width, int height)
 //   render_type::strip -    The vertices are to be interpreted as a triangle strip.
 void render(driver_state& state, render_type type)
 {
-    switch(type){
+    switch(type) {
 	case render_type::triangle:
-		for(int i = 0; i < state.num_vertices; i += 3){
-			const data_geometry** ver = new const data_geometry*[3];
+		
+		for (int i = 0; i < state.num_vertices; i += 3) { 
+		    data_geometry** triangle = new data_geometry*[3];
+		   
+		 for (int j = 0; j < 3; ++j) {
+			triangle[j] = new data_geometry;
+			data_vertex v;
+			v.data = new float[MAX_FLOATS_PER_VERTEX];
+			triangle[j]->data = new float[MAX_FLOATS_PER_VERTEX];
 			
-			ver[0] = new data_geometry;
-			ver[1] = new data_geometry;
-			ver[2] = new data_geometry;
-
-
-			const_cast<data_geometry*>(ver[0])->data = new float[MAX_FLOATS_PER_VERTEX];
-			const_cast<data_geometry*>(ver[1])->data = new float[MAX_FLOATS_PER_VERTEX];
-			const_cast<data_geometry*>(ver[2])->data = new float[MAX_FLOATS_PER_VERTEX];
-			for(int j = 0; j < state.floats_per_vertex; j++){
-				ver[0]->data[j] = state.vertex_data[j + (state.floats_per_vertex * i)];
-				ver[1]->data[j] = state.vertex_data[j + (state.floats_per_vertex * (i + 1))];
-				ver[2]->data[j] = state.vertex_data[j + (state.floats_per_vertex * (i + 2))];
+			for (int k = 0; k < state.floats_per_vertex; ++k) {
+			    v.data[k] = state.vertex_data[k + state.floats_per_vertex*(i+j)];
+			    triangle[j]->data[k] = v.data[k];
 			}
-			rasterize_triangle(state,ver);
-
-			delete [] ver[0]->data;
-			delete [] ver[1]->data;
-			delete [] ver[2]->data;
-			delete ver[0];
-			delete ver[1];
-			delete ver[2];
-			delete [] ver;
+			state.vertex_shader((const data_vertex)v, *triangle[j], state.uniform_data);
+		    }
+		    rasterize_triangle(state, (const data_geometry**)triangle);
 		}
 		break;
-	case render_type::indexed:
-		break;
-	case render_type::fan:
-		break;
-	case render_type::strip:
-		break;
-	default:
-		break;
+	case render_type::indexed: break;
+	case render_type::fan: break;
+	case render_type::strip: break;
+	default: break;
     }
-    std::cout<<"TODO: implement rendering."<<std::endl;
+    //std::cout<<"TODO: implement rendering for indexed, fan, and strip."<<std::endl;
 }
 
 
@@ -101,83 +88,78 @@ void clip_triangle(driver_state& state, const data_geometry* in[3],int face)
 // fragments, calling the fragment shader, and z-buffering.
 void rasterize_triangle(driver_state& state, const data_geometry* in[3])
 {
-   data_geometry* out = new data_geometry[3];
-   int w = state.image_width;
-   int h = state.image_height;
-   int i = 0;
-   int j = 0;
-   unsigned int image_index = 0;
+    int iwt = state.image_width;
+    int iht = state.image_height;
+    int pixCor[3][2];
+    for (int index = 0; index < 3; ++index) {
 
-   int ax = 0;
-   int ay = 0;
-   int bx = 0;
-   int by = 0;
-   int cx = 0;
-   int cy = 0;
 
-   int px = 0;
-   int py = 0;
+	auto xVal = in[index]->gl_Position[0]/in[index]->gl_Position[3];
+	auto yVal = in[index]->gl_Position[1]/in[index]->gl_Position[3];
+	//std::cout << "x: " << x << " y: " << y << std::endl;
+	pixCor[index][0] = (iwt/2.0)*xVal + (iwt/2.0) - 0.5;
+	pixCor[index][1] = (iht/2.0)*yVal + (iht/2.0) - 0.5;
+	//int image_index = pixCor[index][0] + pixCor[index][1] * iwt;
+	
+    }
+    
+    int ax = pixCor[0][0];
+    int ay = pixCor[0][1];
+    int bx = pixCor[1][0]; 
+    int by = pixCor[1][1];
+    int cx = pixCor[2][0]; 
+    int cy = pixCor[2][1];
+    //std::cout << ax << " " << ay << " " << bx << " " << by << " " << cx << " " << cy << std::endl;
+    
 
-   float AREAabc = 0;
-   float AREApbc = 0;
-   float AREAapc = 0;
-   float AREAabp = 0;
+    double abc = 0.5 * ((bx*cy - cx*by) - (ax*cy - cx*ay) + (ax*by - bx*ay));
 
-   float alpha = 0;
-   float beta = 0;
-   float gamma = 0;
-
-  
-  data_vertex v;
-  
-  for(int index = 0; index < 3; index++){
-	v.data = in[index]->data;
-
-	state.vertex_shader(v, out[index], state.uniform_data);
-
-	out[index].gl_Position[0] /= out[index].gl_Position[3];
-	out[index].gl_Position[1] /= out[index].gl_Position[3];
-  
- 	 i = w/2.0 * out[index].gl_Position[0] + w/2.0 - (0.5);
- 	 j = h/2.0 * out[index].gl_Position[1] + h/2.0 - (0.5);
-
- 	 image_index = i + j * w;
- 	 state.image_color[image_index] = make_pixel(255, 255, 255);
-  }
-
-   ax = (w/2.0)*out[0].gl_Position[0] + (w/2.0) - (0.5);
-   ay = (h/2.0)*out[0].gl_Position[1] + (h/2.0) - (0.5);
-   bx = (w/2.0)*out[1].gl_Position[0] + (w/2.0) - (0.5);
-   by = (h/2.0)*out[1].gl_Position[1] + (h/2.0) - (0.5);
-   cx = (w/2.0)*out[2].gl_Position[0] + (w/2.0) - (0.5);
-   cy = (h/2.0)*out[2].gl_Position[1] + (h/2.0) - (0.5);
-
-   //std::cout << ax << " " << ay << " " << bx << " " << by << " " << cx << " " << cy << std::endl;
-
-   AREAabc = 0.5 * (((bx*cy) - (cx*by)) - ((ax*cy) -(cx*ay)) - ((ax*by)-(bx*ay)));
-
-   for(px = 0; px < w; px++){
-	for(py = 0; py < h; py++){
-		AREApbc = 0.5 * (((bx*cy) - (cx*by)) + ((by-cy)*px) + ((cx-bx)*py));
-   		AREAapc = 0.5 * (((cx*ay) - (ax*cy)) + ((cy-ay)*px) + ((ax-cx)*py));
-   		AREAabp = 0.5 * (((ax*by) - (bx*ay)) + ((ay-by)*px) + ((bx-ax)*py));
+    for (int py = 0; py < iht; ++py) {
+    	
+	for (int px = 0; px < iwt; ++px) {
+		double pbc = 0.5 * ((bx*cy - cx*by) + (by - cy)*px + (cx - bx)*py);
+		double apc = 0.5 * ((cx*ay - ax*cy) + (cy - ay)*px + (ax - cx)*py);
+		double abp = 0.5 * ((ax*by - bx*ay) + (ay - by)*px + (bx - ax)*py);
+		double alpha = pbc/abc;
+		double beta = apc/abc;
+		double gamma = abp/abc;
 		
-		alpha = AREApbc / AREAabc;
-		beta = AREAapc / AREAabc;
-		gamma = AREAabp / AREAabc;
-
-
-		//std::cout << alpha << " " << beta << " " << gamma << std::endl;		
-
-		image_index = px + py * w;
-
-		if(alpha >= 0 && beta >= 0 && gamma >= 0){
-			state.image_color[image_index] = make_pixel(255, 255, 255);
+		if (alpha >= 0 && beta >= 0 && gamma >= 0) {
+	    		int index = px + py * iwt;
+	    		auto *data = new float[MAX_FLOATS_PER_VERTEX];
+	    		data_fragment frag{data};
+	    		data_output out;
+	    
+	    	for (int i = 0; i < state.floats_per_vertex; ++i) {
+			float k_g;
+			float alph_perspective, beta_perspective, gam_perspective;
+		
+			switch(state.interp_rules[i]) {
+		    		case interp_type::flat:
+					frag.data[i] = in[0]->data[i];
+				break;
+			        case interp_type::smooth:
+					k_g = (alpha/in[0]->gl_Position[3] + beta/in[1]->gl_Position[3] + gamma/in[2]->gl_Position[3]);
+					alph_perspective = alpha / (k_g * (in[0]->gl_Position[3]));
+					beta_perspective = beta / (k_g * (in[1]->gl_Position[3]));
+					gam_perspective = gamma / (k_g * (in[2]->gl_Position[3]));
+					frag.data[i] = alph_perspective*in[0]->data[i] + beta_perspective*in[1]->data[i] + gam_perspective*in[2]->data[i];
+				break;
+		    		case interp_type::noperspective:
+					frag.data[i] = alpha*in[0]->data[i] + beta*in[1]->data[i] + gamma*in[2]->data[i];
+				break;
+		    		default:
+				break;
 		}
+	    }
+	    state.fragment_shader((const data_fragment)frag, out, state.uniform_data);
+	    out.output_color *= 255;//	    std::cout << o.output_color << std::endl;
+	    state.image_color[index] = make_pixel(out.output_color[0],out.output_color[1],out.output_color[2]);
+	    //state.image_color[index] = make_pixel(255,255,255);
 	}
-   }
-
-
-//std::cout<<"TODO: implement rasterization"<<std::endl;
-
+    }
+    }
+    
+    //std::cout<<"TODO: implement rasterization"<<std::endl;
 }
+
